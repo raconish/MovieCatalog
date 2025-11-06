@@ -1,0 +1,34 @@
+<!-- ----------------------------- HTML DOCUMENT STRUCTURE ----------------------------- -->
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- ----------------------------- HEAD SECTION ----------------------------- -->
+<head>
+    <meta charset="UTF-8">
+    <title>Delete Movie</title>
+    <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
+</head>
+
+<!-- ----------------------------- BODY SECTION ----------------------------- -->
+<body>
+    <!-- ----------------------------- PAGE HEADER ----------------------------- -->
+    <h1>⚠️ Delete Movie</h1>
+
+    <!-- ----------------------------- FEEDBACK MESSAGE ----------------------------- -->
+    {% if message %}
+    <div class="message-box">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <!-- ----------------------------- CONFIRMATION MESSAGE ----------------------------- -->
+    <p>Are you sure you want to delete <strong>{{ movie.title }}</strong> (ID {{ movie.id }})?</p>
+
+    <!-- ----------------------------- DELETE FORM ----------------------------- -->
+    <form action="/delete/{{ movie.id }}" method="post">
+        <button type="submit" style="background-color:#d9534f;color:white;">Yes, delete</button>
+        <a href="/" style="margin-left:15px;">Cancel</a>
+    </form>
+</body>
+
+</html>

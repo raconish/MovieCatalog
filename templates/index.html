@@ -1,0 +1,75 @@
+<!-- ----------------------------- HTML DOCUMENT STRUCTURE ----------------------------- -->
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- ----------------------------- HEAD SECTION ----------------------------- -->
+<head>
+    <meta charset="UTF-8">
+    <title>🎬 Movie Catalog</title>
+    <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
+</head>
+
+<!-- ----------------------------- BODY SECTION ----------------------------- -->
+<body>
+    <!-- ----------------------------- PAGE HEADER ----------------------------- -->
+    <h1>🎬 Movie Catalog</h1>
+
+    <!-- ----------------------------- FEEDBACK MESSAGE ----------------------------- -->
+    {% if message %}
+    <div class="message-box">{{ message }}</div>
+    {% endif %}
+
+    <!-- ----------------------------- SEARCH / FILTER / SORT ----------------------------- -->
+    <form method="get" action="/" class="search-bar">
+        <input type="text" name="q" placeholder="Search by title, director, or genre" value="{{ q }}">
+        
+        <select name="genre">
+            <option value="">All Genres</option>
+            {% for g in genres %}
+            <option value="{{ g.name }}" {% if genre == g.name %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="sort">
+            <option value="title" {% if sort == 'title' %}selected{% endif %}>Sort by Title</option>
+            <option value="year" {% if sort == 'year' %}selected{% endif %}>Sort by Year</option>
+        </select>
+
+        <button type="submit">Apply</button>
+    </form>
+
+    <!-- ----------------------------- ADD MOVIE BUTTON ----------------------------- -->
+    <p><a href="/add" class="btn-primary">➕ Add a New Movie</a></p>
+
+    <!-- ----------------------------- MOVIE GRID ----------------------------- -->
+    <div class="movie-grid">
+        {% for movie in movies %}
+        <div class="movie-card">
+            {% if movie.image_url %}
+                <img src="{{ movie.image_url }}" alt="{{ movie.title }}">
+            {% else %}
+                <div class="placeholder">No Image</div>
+            {% endif %}
+            <div class="movie-info">
+                <h2>{{ movie.title }} ({{ movie.year }})</h2>
+                <p><strong>Director:</strong> {{ movie.director.name if movie.director else '—' }}</p>
+                <p><strong>Genres:</strong>
+                {% if movie.genres %}
+                    {{ movie.genres | map(attribute='name') | join(', ') }}
+                {% else %}
+                    —
+                {% endif %}
+                </p>
+
+                <p>{{ movie.description }}</p>
+                <div class="actions">
+                    <a href="/edit/{{ movie.id }}">Edit</a> |
+                    <a href="/delete/{{ movie.id }}">Delete</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+

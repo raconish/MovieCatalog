@@ -1,0 +1,51 @@
+<!-- ----------------------------- HTML DOCUMENT STRUCTURE ----------------------------- -->
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- ----------------------------- HEAD SECTION ----------------------------- -->
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Movie</title>
+    <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
+</head>
+
+<!-- ----------------------------- BODY SECTION ----------------------------- -->
+<body>
+    <!-- ----------------------------- PAGE HEADER ----------------------------- -->
+    <h1>✏️ Edit Movie</h1>
+
+    <!-- ----------------------------- FEEDBACK MESSAGE ----------------------------- -->
+    {% if message %}
+    <div class="message-box">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <!-- ----------------------------- EDIT MOVIE FORM ----------------------------- -->
+    <form action="/edit/{{ movie.id }}" method="post">
+        <label>Title:</label><br>
+        <input type="text" name="title" value="{{ movie.title }}" required><br><br>
+
+        <label>Year:</label><br>
+        <input type="number" name="year" value="{{ movie.year }}" required><br><br>
+
+        <label>Description:</label><br>
+        <textarea name="description" rows="3">{{ movie.description }}</textarea><br><br>
+
+        <label>Director:</label><br>
+        <input type="text" name="director_name" value="{{ movie.director.name if movie.director else '' }}" required><br><br>
+
+        <label>Genre:</label><br>
+        <input type="text" name="genre_name" value="{{ movie.genre.name if movie.genre else '' }}" required><br><br>
+
+        <label>Poster URL:</label><br>
+        <input type="url" name="image_url" value="{{ movie.image_url or '' }}"><br><br>
+
+        <button type="submit">Save Changes</button>
+    </form>
+
+    <!-- ----------------------------- NAVIGATION LINK ----------------------------- -->
+    <p><a href="/">⬅ Back to Catalog</a></p>
+</body>
+
+</html>
