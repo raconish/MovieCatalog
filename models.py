@@ -11,6 +11,14 @@ movie_genre_association = Table(
     Column("genre_id", Integer, ForeignKey("genres.id"))
 )
 
+#NTS: It’s a bridge table — also called an association or junction table.
+#It’s used when you have a many-to-many relationship.
+#E.g. 
+#One movie can have many genres (e.g., Inception → Action, Sci-Fi).
+#One genre can belong to many movies (e.g., Sci-Fi → Inception, Interstellar).
+#Relational databases don’t support that directly, so you create a middle table that links them.
+#Same for genre, since they both need multiple relations.
+
 show_genre_association = Table(
     "show_genre_association",
     Base.metadata,
@@ -54,6 +62,8 @@ class Movie(Base):
     genres = relationship("Genre", secondary=movie_genre_association, back_populates="movies")
 
     reviews = relationship("Review", back_populates="movie", cascade="all, delete-orphan")
+    
+#NTS: Without the secondary, SQLAlchemy assumes a one-to-many relationship (simple foreign key).
 
 # ----------------------------- REVIEW MODEL -----------------------------
 class Review(Base):

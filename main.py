@@ -8,8 +8,6 @@ import crud
 from models import Director, Genre, Movie
 from fastapi.responses import RedirectResponse
 
-
-
 # ----------------------------- APP INITIALIZATION -----------------------------
 app = FastAPI()  # Starts the FastAPI application
 
@@ -19,18 +17,22 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        #NTS keyword that temporarily hands over something (like a database connection)
+        #NTS to the caller and then continues after that point once the work is done
     finally:
         db.close()
 
 # ----------------------------- TEMPLATE & STATIC SETUP -----------------------------
 templates = Jinja2Templates(directory="templates")             # Jinja2 templates folder
 app.mount("/static", StaticFiles(directory="static"), name="static")  # Mount static files (CSS, JS, images)
-
-# ----------------------------- HOME PAGE -----------------------------
+#NTS app.mount is telling where to find the templates (shop display/directions to where to find them)
 # ----------------------------- HOME PAGE -----------------------------
 @app.get("/", response_class=HTMLResponse)
+#NTS to show an HTML page
+#by deafult, when using FastAPI, the page uses JSON to return formats, so we need to specify it will be 
+#HLTML instead
 def home(
-    request: Request,
+    request: Request, #NTS incoming request itself (letter that we receive with the information)
     db = Depends(get_db),
     q: str = "",        # search text
     genre: str = "",    # filter by genre name
@@ -38,11 +40,9 @@ def home(
 ):
     """Render homepage with search, filter, and sort."""
 
-    # Import models so we can query their fields
-    from models import Movie, Director, Genre
-
     # Start a base query
     query = db.query(Movie).join(Movie.director).outerjoin(Movie.genres)
+    #NTS building a db query, using SQLAlchemy inside Python
 
     # 🔍 Search by title, description, director, or genre
     if q:
@@ -51,6 +51,13 @@ def home(
             (Movie.description.ilike(f"%{q}%")) |
             (Director.name.ilike(f"%{q}%")) |
             (Genre.name.ilike(f"%{q}%"))
+
+            #NTS Look for this text anywhere in the title, description, director, or genre
+            #NTS The ilike function just makes the search case-insensitive, so it doesn’t 
+            #NTS matter if the user types uppercase or lowercase letters
+            #NTS The f there is just for something called an f-string in Python. It’s a way to 
+            #format strings, and it lets you put variables inside curly braces right inside the string. 
+            #So when you see f"%{q}%", it’s just putting the value of the variable q into the string
         )
 
     # 🎬 Filter by genre
@@ -170,8 +177,6 @@ def show_add_movie_form(request: Request, db = Depends(get_db)):
         {"request": request, "directors": directors, "genres": genres}
     )
 
-
-# ----------------------------- HANDLE ADD MOVIE FORM -----------------------------
 # ----------------------------- HANDLE ADD MOVIE FORM -----------------------------
 @app.post("/add", response_class=HTMLResponse)
 def handle_add_movie(
@@ -233,7 +238,6 @@ def show_edit_movie_form(request: Request, movie_id: int, db = Depends(get_db)):
         "edit_movie.html",
         {"request": request, "movie": movie, "directors": directors, "genres": genres}
     )
-
 
 # ----------------------------- HANDLE EDIT MOVIE FORM -----------------------------
 @app.post("/edit/{movie_id}", response_class=HTMLResponse)
