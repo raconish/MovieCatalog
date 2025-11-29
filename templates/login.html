@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <h1>🔐 Login</h1>
+
+    {% if error %}
+    <div class="message-box" style="background-color:#f2dede;color:#a94442;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form action="/login" method="post" class="form-vertical">
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <label>Username:</label>
+        <input type="text" name="username" required>
+
+        <label>Password:</label>
+        <input type="password" name="password" required>
+
+        <button type="submit" class="btn-primary">Login</button>
+    </form>
+
+    <p style="text-align:center;"><a href="/">⬅ Back to Catalog</a></p>
+</body>
+
+</html>

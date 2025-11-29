@@ -1,0 +1,57 @@
+<div class="modal-poster-bg" style="background-image: url('{{ movie.image_url }}');"></div>
+
+<div class="modal-flex">
+    <div class="modal-left">
+        {% if movie.image_url %}
+        <img src="{{ movie.image_url }}" class="poster-large">
+        {% endif %}
+    </div>
+
+    <div class="modal-right">
+        <h1 class="modal-title">{{ movie.title }} ({{ movie.year }})</h1>
+
+        <p><strong>Director:</strong> {{ movie.director.name }}</p>
+
+        <p><strong>Genres:</strong>
+            {% for g in movie.genres %}
+            {{ g.name }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+
+        <p>{{ movie.description }}</p>
+
+        {% if user %}
+        <a href="/edit/{{ movie.id }}" class="btn-primary">Edit Movie</a>
+        <a href="/delete/{{ movie.id }}" class="btn-danger" style="margin-left: 10px;">Delete Movie</a>
+        {% endif %}
+
+        <hr>
+
+        <h3 class="modal-section-title">Reviews</h3>
+
+        {% if movie.reviews %}
+        {% for r in movie.reviews %}
+        <div class="review-box">
+            <p><strong>Rating:</strong> {{ r.rating }}/5</p>
+            <p><strong>Review:</strong> {{ r.comment }}</p>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p>No reviews yet.</p>
+        {% endif %}
+
+        <hr>
+
+        <h3 class="modal-section-title">Add a Review</h3>
+
+        <form onsubmit="submitReview(event, {{ movie.id }})">
+            <label>Rating (0–5):</label>
+            <input type="number" min="0" max="5" name="rating" required>
+
+            <label>Your Review:</label>
+            <textarea name="comment" required></textarea>
+
+            <button type="submit" class="btn-primary review-submit">Submit Review</button>
+        </form>
+    </div>
+</div>

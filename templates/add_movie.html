@@ -1,61 +1,41 @@
-<!-- ----------------------------- HTML DOCUMENT STRUCTURE ----------------------------- -->
 <!DOCTYPE html>
 <html lang="en">
 
-<!-- ----------------------------- HEAD SECTION ----------------------------- -->
 <head>
     <meta charset="UTF-8">
     <title>Add Movie</title>
-    <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
-<!-- ----------------------------- BODY SECTION ----------------------------- -->
 <body>
-    <!-- ----------------------------- PAGE HEADER ----------------------------- -->
     <h1>➕ Add a New Movie</h1>
 
-    <!-- ----------------------------- FEEDBACK MESSAGE ----------------------------- -->
     {% if message %}
     <div class="message-box">{{ message }}</div>
     {% endif %}
 
-    <!-- ----------------------------- ADD MOVIE FORM ----------------------------- -->
-    <form action="/add" method="post" class="movie-form">
-        <div class="form-row">
-            <label for="title">Title:</label>
-            <input type="text" name="title" required>
-        </div>
+    <form action="/add" method="post" class="form-vertical">
+        <label>Title:</label>
+        <input type="text" name="title" required>
 
-        <div class="form-row">
-            <label for="year">Year:</label>
-            <input type="number" name="year" required>
-        </div>
+        <label>Year:</label>
+        <input type="number" name="year" required>
 
-        <div class="form-row">
-            <label for="description">Description:</label>
-            <textarea name="description" rows="3"></textarea>
-        </div>
+        <label>Description:</label>
+        <textarea name="description" rows="3"></textarea>
 
-        <div class="form-row">
-            <label for="director_name">Director:</label>
-            <input type="text" name="director_name" required>
-        </div>
+        <label>Director:</label>
+        <input type="text" name="director_name" required>
 
-        <div class="form-row">
-            <label for="genre_name">Genre:</label>
-            <input type="text" name="genre_name" required>
-        </div>
+        <label>Genre(s):</label>
+        <input type="text" name="genre_name" placeholder="e.g., Romance, Comedy">
 
-        <div class="form-row">
-            <label for="image_url">Poster URL:</label>
-            <input type="url" name="image_url" placeholder="https://example.com/poster.jpg">
-        </div>
+        <label>Poster URL:</label>
+        <input type="url" name="image_url" placeholder="https://example.com/poster.jpg">
 
         <button type="submit" class="btn-primary">Add Movie</button>
     </form>
 
-
-    <!-- ----------------------------- NAVIGATION LINK ----------------------------- -->
     <p style="text-align:center;"><a href="/">⬅ Back to Catalog</a></p>
 </body>
 

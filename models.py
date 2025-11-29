@@ -8,23 +8,23 @@ movie_genre_association = Table(
     "movie_genre_association",
     Base.metadata,
     Column("movie_id", Integer, ForeignKey("movies.id")),
-    Column("genre_id", Integer, ForeignKey("genres.id"))
+    Column("genre_id", Integer, ForeignKey("genres.id")),
 )
-
-#NTS: It’s a bridge table — also called an association or junction table.
-#It’s used when you have a many-to-many relationship.
-#E.g. 
-#One movie can have many genres (e.g., Inception → Action, Sci-Fi).
-#One genre can belong to many movies (e.g., Sci-Fi → Inception, Interstellar).
-#Relational databases don’t support that directly, so you create a middle table that links them.
-#Same for genre, since they both need multiple relations.
 
 show_genre_association = Table(
     "show_genre_association",
     Base.metadata,
     Column("show_id", Integer, ForeignKey("shows.id")),
-    Column("genre_id", Integer, ForeignKey("genres.id"))
+    Column("genre_id", Integer, ForeignKey("genres.id")),
 )
+
+# ----------------------------- USER MODEL -----------------------------
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
 
 # ----------------------------- DIRECTOR MODEL -----------------------------
 class Director(Base):
@@ -45,7 +45,7 @@ class Genre(Base):
     name = Column(String, unique=True)
 
     movies = relationship("Movie", secondary=movie_genre_association, back_populates="genres")
-    shows = relationship("Show", secondary=show_genre_association, back_populates="genres")  # ✅ added this
+    shows = relationship("Show", secondary=show_genre_association, back_populates="genres")
 
 # ----------------------------- MOVIE MODEL -----------------------------
 class Movie(Base):
@@ -60,10 +60,7 @@ class Movie(Base):
 
     director = relationship("Director", back_populates="movies")
     genres = relationship("Genre", secondary=movie_genre_association, back_populates="movies")
-
     reviews = relationship("Review", back_populates="movie", cascade="all, delete-orphan")
-    
-#NTS: Without the secondary, SQLAlchemy assumes a one-to-many relationship (simple foreign key).
 
 # ----------------------------- REVIEW MODEL -----------------------------
 class Review(Base):
@@ -89,4 +86,4 @@ class Show(Base):
     director_id = Column(Integer, ForeignKey("directors.id"))
     director = relationship("Director", back_populates="shows")
 
-    genres = relationship("Genre", secondary=show_genre_association, back_populates="shows")  # ✅ fixed this
+    genres = relationship("Genre", secondary=show_genre_association, back_populates="shows")

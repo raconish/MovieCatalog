@@ -1,82 +1,123 @@
 # ----------------------------- IMPORTS -----------------------------
-from fastapi import FastAPI, Request, Depends, Form
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+import hashlib
+from typing import Optional, List
+
+from fastapi import FastAPI, Request, Depends, Form, HTTPException, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from sqlalchemy.sql import func
+
 from database import SessionLocal
 import crud
-from models import Director, Genre, Movie
-from fastapi.responses import RedirectResponse
+from models import Director, Genre, Movie, Review, User
 
 # ----------------------------- APP INITIALIZATION -----------------------------
-app = FastAPI()  # Starts the FastAPI application
+app = FastAPI()
 
 # ----------------------------- DATABASE DEPENDENCY -----------------------------
 def get_db():
-    """Dependency that provides a database session."""
     db = SessionLocal()
     try:
         yield db
-        #NTS keyword that temporarily hands over something (like a database connection)
-        #NTS to the caller and then continues after that point once the work is done
     finally:
         db.close()
 
+# ----------------------------- AUTH HELPERS -----------------------------
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return hash_password(password) == password_hash
+
+def get_current_user(request: Request, db=Depends(get_db)) -> Optional[User]:
+    username = request.cookies.get("username")
+    if not username:
+        return None
+    return db.query(User).filter(User.username == username).first()
+
 # ----------------------------- TEMPLATE & STATIC SETUP -----------------------------
-templates = Jinja2Templates(directory="templates")             # Jinja2 templates folder
-app.mount("/static", StaticFiles(directory="static"), name="static")  # Mount static files (CSS, JS, images)
-#NTS app.mount is telling where to find the templates (shop display/directions to where to find them)
-# ----------------------------- HOME PAGE -----------------------------
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ----------------------------- Pydantic SCHEMAS (API) -----------------------------
+class MovieCreate(BaseModel):
+    title: str
+    year: int
+    description: Optional[str] = None
+    director_id: int
+    genre_ids: List[int]
+    image_url: Optional[str] = None
+
+class MovieOut(BaseModel):
+    id: int
+    title: str
+    year: int
+    description: Optional[str]
+    director: Optional[str]
+    genres: List[str]
+    image_url: Optional[str]
+
+    class Config:
+        orm_mode = True
+
+# ----------------------------- API HELPERS -----------------------------
+def movie_to_out(movie: Movie) -> MovieOut:
+    return MovieOut(
+        id=movie.id,
+        title=movie.title,
+        year=movie.year,
+        description=movie.description,
+        director=movie.director.name if movie.director else None,
+        genres=[g.name for g in movie.genres],
+        image_url=movie.image_url,
+    )
+
+# ----------------------------- HTML ROUTES -----------------------------
 @app.get("/", response_class=HTMLResponse)
-#NTS to show an HTML page
-#by deafult, when using FastAPI, the page uses JSON to return formats, so we need to specify it will be 
-#HLTML instead
 def home(
-    request: Request, #NTS incoming request itself (letter that we receive with the information)
-    db = Depends(get_db),
-    q: str = "",        # search text
-    genre: str = "",    # filter by genre name
-    sort: str = "title" # sort by title or year
+    request: Request,
+    db=Depends(get_db),
+    q: str = "",
+    genre: str = "",
+    sort: str = "title",
+    user: Optional[User] = Depends(get_current_user),
 ):
-    """Render homepage with search, filter, and sort."""
-
-    # Start a base query
     query = db.query(Movie).join(Movie.director).outerjoin(Movie.genres)
-    #NTS building a db query, using SQLAlchemy inside Python
 
-    # 🔍 Search by title, description, director, or genre
     if q:
         query = query.filter(
-            (Movie.title.ilike(f"%{q}%")) |
-            (Movie.description.ilike(f"%{q}%")) |
-            (Director.name.ilike(f"%{q}%")) |
-            (Genre.name.ilike(f"%{q}%"))
-
-            #NTS Look for this text anywhere in the title, description, director, or genre
-            #NTS The ilike function just makes the search case-insensitive, so it doesn’t 
-            #NTS matter if the user types uppercase or lowercase letters
-            #NTS The f there is just for something called an f-string in Python. It’s a way to 
-            #format strings, and it lets you put variables inside curly braces right inside the string. 
-            #So when you see f"%{q}%", it’s just putting the value of the variable q into the string
+            (Movie.title.ilike(f"%{q}%"))
+            | (Movie.description.ilike(f"%{q}%"))
+            | (Director.name.ilike(f"%{q}%"))
+            | (Genre.name.ilike(f"%{q}%"))
         )
 
-    # 🎬 Filter by genre
     if genre:
         query = query.filter(Genre.name.ilike(f"%{genre}%"))
 
-    # ↕️ Sort results
     if sort == "year":
         query = query.order_by(Movie.year)
+    elif sort == "rating":
+        query = (
+            query.outerjoin(Movie.reviews)
+            .group_by(Movie.id)
+            .order_by(func.avg(Review.rating).desc())
+        )
     else:
         query = query.order_by(Movie.title)
 
-    # Run the query
     movies = query.all()
 
-    # Load all genres for the filter dropdown
+    for movie in movies:
+        if movie.reviews:
+            movie.avg_rating = sum(r.rating for r in movie.reviews) / len(movie.reviews)
+        else:
+            movie.avg_rating = None
+
     genres = db.query(Genre).all()
 
-    # Return the rendered page
     return templates.TemplateResponse(
         "index.html",
         {
@@ -85,218 +126,318 @@ def home(
             "q": q,
             "genre": genre,
             "sort": sort,
-            "genres": genres
-        }
+            "genres": genres,
+            "user": user,
+        },
     )
 
-
-# ----------------------------- GET: ALL MOVIES (API ENDPOINT) -----------------------------
-@app.get("/movies")
-def list_movies(db = Depends(get_db)):
-    """Return all movies as JSON for API testing (e.g., Swagger UI)."""
-    movies = crud.get_movies(db)
-    return [
-        {
-            "id": m.id,
-            "title": m.title,
-            "year": m.year,
-            "description": m.description,
-            "director_id": m.director_id,
-            "genre_id": m.genre_id
-        }
-        for m in movies
-    ]
-
-# ----------------------------- CREATE: ADD MOVIE (API) -----------------------------
-@app.post("/movies")
-def add_movie(
-    title: str = Form(...),
-    year: int = Form(...),
-    description: str = Form(...),
-    director_id: int = Form(...),
-    genre_id: int = Form(...),
-    db = Depends(get_db)
+# ---------- Login / Logout ----------
+@app.get("/login", response_class=HTMLResponse)
+def show_login(
+    request: Request,
+    next: str = "/",
+    user: Optional[User] = Depends(get_current_user),
 ):
-    """Add a new movie through API."""
-    movie = crud.create_movie(db, title, year, description, director_id, genre_id)
-    return {
-        "message": "Movie added successfully!",
-        "movie": {
-            "id": movie.id,
-            "title": movie.title,
-            "year": movie.year,
-            "description": movie.description,
-            "director_id": movie.director_id,
-            "genre_id": movie.genre_id
-        }
-    }
+    if user:
+        return RedirectResponse(url=next, status_code=303)
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": None, "next": next},
+    )
 
-# ----------------------------- UPDATE: EDIT MOVIE (API) -----------------------------
-@app.put("/movies/{movie_id}")
-def edit_movie(
-    movie_id: int,
-    title: str = Form(...),
-    year: int = Form(...),
-    description: str = Form(...),
-    director_id: int = Form(...),
-    genre_id: int = Form(...),
-    db = Depends(get_db)
+@app.post("/login", response_class=HTMLResponse)
+def handle_login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/"),
+    db=Depends(get_db),
 ):
-    """Update an existing movie via API."""
-    movie = crud.update_movie(db, movie_id, title, year, description, director_id, genre_id)
-    if not movie:
-        return {"error": "Movie not found"}
-    return {
-        "message": "Movie updated successfully!",
-        "movie": {
-            "id": movie.id,
-            "title": movie.title,
-            "year": movie.year,
-            "description": movie.description,
-            "director_id": movie.director_id,
-            "genre_id": movie.genre_id
-        }
-    }
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not verify_password(password, user.password_hash):
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "error": "Invalid username or password.",
+                "next": next,
+            },
+            status_code=400,
+        )
 
-# ----------------------------- DELETE: REMOVE MOVIE (API) -----------------------------
-@app.delete("/movies/{movie_id}")
-def delete_movie(movie_id: int, db = Depends(get_db)):
-    """Delete a movie via API."""
-    success = crud.delete_movie(db, movie_id)
-    if not success:
-        return {"error": "Movie not found"}
-    return {"message": f"Movie with ID {movie_id} deleted successfully!"}
+    response = RedirectResponse(url=next or "/", status_code=303)
+    response.set_cookie("username", user.username, httponly=True)
+    return response
 
-# ----------------------------- ADD MOVIE PAGE -----------------------------
+@app.get("/logout")
+def logout():
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie("username")
+    return response
+
+# ---------- Add movie (HTML) ----------
 @app.get("/add", response_class=HTMLResponse)
-def show_add_movie_form(request: Request, db = Depends(get_db)):
+def show_add_movie_form(
+    request: Request,
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse(url="/login?next=/add", status_code=303)
+
     directors = db.query(Director).all()
     genres = db.query(Genre).all()
     return templates.TemplateResponse(
         "add_movie.html",
-        {"request": request, "directors": directors, "genres": genres}
+        {
+            "request": request,
+            "directors": directors,
+            "genres": genres,
+            "user": user,
+        },
     )
 
-# ----------------------------- HANDLE ADD MOVIE FORM -----------------------------
 @app.post("/add", response_class=HTMLResponse)
 def handle_add_movie(
     request: Request,
     title: str = Form(...),
     year: int = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     director_name: str = Form(...),
-    genre_name: str = Form(...),   # This can now be multiple, comma-separated
+    genre_name: str = Form(""),
     image_url: str = Form(""),
-    db = Depends(get_db)
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
 ):
-    from models import Director, Genre
+    if not user:
+        return RedirectResponse(url="/login?next=/add", status_code=303)
 
-    # 🎬 Find or create director
-    director = db.query(Director).filter(Director.name.ilike(director_name)).first()
-    if not director:
-        director = Director(name=director_name)
-        db.add(director)
-        db.commit()
-        db.refresh(director)
-
-    # 🎭 Handle multiple genres (split by commas)
     genre_names = [g.strip() for g in genre_name.split(",") if g.strip()]
-    genres = []
-    for name in genre_names:
-        genre = db.query(Genre).filter(Genre.name.ilike(name)).first()
-        if not genre:
-            genre = Genre(name=name)
-            db.add(genre)
-            db.commit()
-            db.refresh(genre)
-        genres.append(genre)
+    crud.create_movie_with_names(
+        db=db,
+        title=title,
+        year=year,
+        description=description or None,
+        director_name=director_name,
+        genre_names=genre_names,
+        image_url=image_url or None,
+    )
 
-    # 🎞️ Create the movie with multiple genres
-    movie = crud.create_movie(db, title, year, description, director.id, genres)
-    movie.image_url = image_url
-    db.commit()
-    db.refresh(movie)
+    return RedirectResponse(url="/", status_code=303)
 
-    # ✅ Redirect to home page after adding (prevents duplicates on refresh)
-    response = RedirectResponse(url="/", status_code=303)
-    return response
-
-
-# ----------------------------- EDIT MOVIE PAGE -----------------------------
+# ---------- Edit movie (HTML) ----------
 @app.get("/edit/{movie_id}", response_class=HTMLResponse)
-def show_edit_movie_form(request: Request, movie_id: int, db = Depends(get_db)):
-    """Render the Edit Movie form page with director/genre dropdowns."""
+def show_edit_movie_form(
+    request: Request,
+    movie_id: int,
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse(url=f"/login?next=/edit/{movie_id}", status_code=303)
+
     movie = db.query(Movie).filter(Movie.id == movie_id).first()
     if not movie:
+        movies = crud.get_movies(db)
         return templates.TemplateResponse(
             "index.html",
-            {"request": request, "movies": crud.get_movies(db), "message": "Movie not found"}
+            {
+                "request": request,
+                "movies": movies,
+                "message": "Movie not found",
+                "user": user,
+            },
         )
+
     directors = db.query(Director).all()
     genres = db.query(Genre).all()
     return templates.TemplateResponse(
         "edit_movie.html",
-        {"request": request, "movie": movie, "directors": directors, "genres": genres}
+        {
+            "request": request,
+            "movie": movie,
+            "directors": directors,
+            "genres": genres,
+            "user": user,
+        },
     )
 
-# ----------------------------- HANDLE EDIT MOVIE FORM -----------------------------
 @app.post("/edit/{movie_id}", response_class=HTMLResponse)
 def handle_edit_movie(
     request: Request,
     movie_id: int,
     title: str = Form(...),
     year: int = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     director_name: str = Form(...),
-    genre_name: str = Form(...),
+    genre_name: str = Form(""),
     image_url: str = Form(""),
-    db = Depends(get_db)
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
 ):
-    from models import Director, Genre
+    if not user:
+        return RedirectResponse(url=f"/login?next=/edit/{movie_id}", status_code=303)
 
-    # Find or create director
-    director = db.query(Director).filter(Director.name.ilike(director_name)).first()
-    if not director:
-        director = Director(name=director_name)
-        db.add(director)
-        db.commit()
-        db.refresh(director)
+    genre_names = [g.strip() for g in genre_name.split(",") if g.strip()]
+    updated = crud.update_movie_with_names(
+        db=db,
+        movie_id=movie_id,
+        title=title,
+        year=year,
+        description=description or None,
+        director_name=director_name,
+        genre_names=genre_names,
+        image_url=image_url or None,
+    )
+    if not updated:
+        return RedirectResponse(url="/", status_code=303)
 
-    # Find or create genre
-    genre = db.query(Genre).filter(Genre.name.ilike(genre_name)).first()
-    if not genre:
-        genre = Genre(name=genre_name)
-        db.add(genre)
-        db.commit()
-        db.refresh(genre)
+    return RedirectResponse(url="/", status_code=303)
 
-    # Update movie and poster
-    movie = crud.update_movie(db, movie_id, title, year, description, director.id, genre.id)
-    movie.image_url = image_url  # ✅ this is what saves the new poster link
-    db.commit()
-    db.refresh(movie)
-
-    response = RedirectResponse(url="/", status_code=303)
-    return response
-
-# ----------------------------- DELETE CONFIRMATION PAGE -----------------------------
+# ---------- Delete movie (HTML) ----------
 @app.get("/delete/{movie_id}", response_class=HTMLResponse)
-def show_delete_confirmation(request: Request, movie_id: int, db = Depends(get_db)):
-    """Render the Delete Movie confirmation page."""
-    movie = db.query(crud.Movie).filter(crud.Movie.id == movie_id).first()
+def show_delete_confirmation(
+    request: Request,
+    movie_id: int,
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse(url=f"/login?next=/delete/{movie_id}", status_code=303)
+
+    movie = db.query(Movie).filter(Movie.id == movie_id).first()
     if not movie:
         movies = crud.get_movies(db)
         return templates.TemplateResponse(
             "index.html",
-            {"request": request, "movies": movies, "message": "Movie not found"}
+            {
+                "request": request,
+                "movies": movies,
+                "message": "Movie not found",
+                "user": user,
+            },
         )
-    return templates.TemplateResponse("delete_movie.html", {"request": request, "movie": movie})
+    return templates.TemplateResponse(
+        "delete_movie.html",
+        {"request": request, "movie": movie, "user": user},
+    )
 
-# ----------------------------- HANDLE DELETE MOVIE FORM -----------------------------
 @app.post("/delete/{movie_id}", response_class=HTMLResponse)
-def handle_delete_movie(request: Request, movie_id: int, db = Depends(get_db)):
-    """Process Delete Movie form and reload main catalog."""
+def handle_delete_movie(
+    request: Request,
+    movie_id: int,
+    db=Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse(url=f"/login?next=/delete/{movie_id}", status_code=303)
+
     success = crud.delete_movie(db, movie_id)
     movies = crud.get_movies(db)
-    message = f"Movie with ID {movie_id} deleted successfully!" if success else "Movie not found."
-    return templates.TemplateResponse("index.html", {"request": request, "movies": movies, "message": message})
+    message = (
+        f"Movie with ID {movie_id} deleted successfully!"
+        if success
+        else "Movie not found."
+    )
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "movies": movies,
+            "message": message,
+            "user": user,
+        },
+    )
+
+# ---------- Reviews & modal (HTML) ----------
+@app.post("/movies/{movie_id}/review")
+def add_review(
+    movie_id: int,
+    rating: int = Form(...),
+    comment: str = Form(...),
+    db=Depends(get_db),
+):
+    review = Review(
+        movie_id=movie_id,
+        rating=rating,
+        comment=comment,
+        user_name="Anonymous",
+    )
+    db.add(review)
+    db.commit()
+    return {"success": True}
+
+@app.get("/movies/{movie_id}", response_class=HTMLResponse)
+def get_movie_html(
+    request: Request,
+    movie_id: int,
+    db=Depends(get_db),
+    html: int = 0,
+    user: Optional[User] = Depends(get_current_user),
+):
+    movie = db.query(Movie).filter(Movie.id == movie_id).first()
+
+    if html:
+        return templates.TemplateResponse(
+            "movie_modal.html",
+            {"request": request, "movie": movie, "user": user},
+        )
+
+    return movie
+
+# ----------------------------- API ROUTES (RESTFUL) -----------------------------
+@app.get("/api/movies", response_model=List[MovieOut])
+def api_get_movies(db=Depends(get_db)):
+    movies = crud.get_movies(db)
+    return [movie_to_out(m) for m in movies]
+
+@app.get("/api/movies/{movie_id}", response_model=MovieOut)
+def api_get_movie(movie_id: int, db=Depends(get_db)):
+    movie = crud.get_movie(db, movie_id)
+    if not movie:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
+    return movie_to_out(movie)
+
+@app.post("/api/movies", response_model=MovieOut, status_code=status.HTTP_201_CREATED)
+def api_create_movie(movie_in: MovieCreate, db=Depends(get_db)):
+    try:
+        movie = crud.create_movie(
+            db=db,
+            title=movie_in.title,
+            year=movie_in.year,
+            description=movie_in.description,
+            director_id=movie_in.director_id,
+            genre_ids=movie_in.genre_ids,
+            image_url=movie_in.image_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return movie_to_out(movie)
+
+@app.put("/api/movies/{movie_id}", response_model=MovieOut)
+def api_update_movie(movie_id: int, movie_in: MovieCreate, db=Depends(get_db)):
+    try:
+        movie = crud.update_movie(
+            db=db,
+            movie_id=movie_id,
+            title=movie_in.title,
+            year=movie_in.year,
+            description=movie_in.description,
+            director_id=movie_in.director_id,
+            genre_ids=movie_in.genre_ids,
+            image_url=movie_in.image_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not movie:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
+
+    return movie_to_out(movie)
+
+@app.delete("/api/movies/{movie_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_movie(movie_id: int, db=Depends(get_db)):
+    success = crud.delete_movie(db, movie_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
+    return

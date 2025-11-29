@@ -1,53 +1,52 @@
-# seedtest.py
+# ----------------------------- IMPORTS -----------------------------
 from database import SessionLocal
-from models import Director, Genre, Movie, Review, Show
+from models import Director, Genre, Movie, Review, Show, User
+import hashlib
 
+# ----------------------------- PASSWORD HELPERS -----------------------------
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ----------------------------- MAIN SEED FUNCTION -----------------------------
 def main():
     db = SessionLocal()
     try:
-        # 1️⃣ Create sample director and genre
         nolan = Director(name="Christopher Nolan", birth_date="1970-07-30")
         sci_fi = Genre(name="Sci-Fi")
 
-        # 2️⃣ Create a movie linked to them
         inception = Movie(
             title="Inception",
             year=2010,
             description="A thief who steals corporate secrets through dream-sharing.",
             director=nolan,
-            genre=sci_fi
+            genres=[sci_fi],
         )
 
-        # 3️⃣ Create a review for the movie
         review = Review(
             user_name="Amanda",
             rating=5,
             comment="Mind-bending classic!",
-            movie=inception
+            movie=inception,
         )
 
-        # 4️⃣ Create a show linked to same director & genre
         dark = Show(
             title="Dark",
             year=2017,
             description="A family saga with a time-travel twist.",
             director=nolan,
-            genre=sci_fi
+            genres=[sci_fi],
         )
 
-        # 5️⃣ Add everything to the database
-        db.add_all([nolan, sci_fi, inception, review, dark])
+        admin = User(
+            username="admin",
+            password_hash=hash_password("admin123"),
+        )
+
+        db.add_all([nolan, sci_fi, inception, review, dark, admin])
         db.commit()
 
-        # 6️⃣ Optional: print out data to confirm
         movies = db.query(Movie).all()
-        print(f"Movies: {[m.title for m in movies]}")
-
-        shows = db.query(Show).all()
-        print(f"Shows: {[s.title for s in shows]}")
-
-        revs = db.query(Review).all()
-        print(f"Reviews: {[f'{r.user_name} -> {r.rating}' for r in revs]}")
+        print("Movies:", [m.title for m in movies])
 
     except Exception as e:
         print("❌ Error:", e)
@@ -55,5 +54,6 @@ def main():
     finally:
         db.close()
 
+# ----------------------------- EXECUTION ENTRY POINT -----------------------------
 if __name__ == "__main__":
     main()

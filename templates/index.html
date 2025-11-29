@@ -1,75 +1,114 @@
-<!-- ----------------------------- HTML DOCUMENT STRUCTURE ----------------------------- -->
 <!DOCTYPE html>
 <html lang="en">
 
-<!-- ----------------------------- HEAD SECTION ----------------------------- -->
 <head>
     <meta charset="UTF-8">
     <title>🎬 Movie Catalog</title>
-    <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
-<!-- ----------------------------- BODY SECTION ----------------------------- -->
 <body>
-    <!-- ----------------------------- PAGE HEADER ----------------------------- -->
-    <h1>🎬 Movie Catalog</h1>
+    <div class="page-container">
 
-    <!-- ----------------------------- FEEDBACK MESSAGE ----------------------------- -->
-    {% if message %}
-    <div class="message-box">{{ message }}</div>
-    {% endif %}
+        <div class="top-bar">
+            <h1>🎬 Movie Catalog</h1>
 
-    <!-- ----------------------------- SEARCH / FILTER / SORT ----------------------------- -->
-    <form method="get" action="/" class="search-bar">
-        <input type="text" name="q" placeholder="Search by title, director, or genre" value="{{ q }}">
-        
-        <select name="genre">
-            <option value="">All Genres</option>
-            {% for g in genres %}
-            <option value="{{ g.name }}" {% if genre == g.name %}selected{% endif %}>{{ g.name }}</option>
-            {% endfor %}
-        </select>
+            <form method="get" action="/" class="search-bar">
+                <input type="text" name="q" placeholder="Search by title, director, or genre" value="{{ q }}">
 
-        <select name="sort">
-            <option value="title" {% if sort == 'title' %}selected{% endif %}>Sort by Title</option>
-            <option value="year" {% if sort == 'year' %}selected{% endif %}>Sort by Year</option>
-        </select>
+                <select name="genre">
+                    <option value="">All Genres</option>
+                    {% for g in genres %}
+                    <option value="{{ g.name }}" {% if genre==g.name %}selected{% endif %}>
+                        {{ g.name }}
+                    </option>
+                    {% endfor %}
+                </select>
 
-        <button type="submit">Apply</button>
-    </form>
+                <select name="sort">
+                    <option value="title" {% if sort=='title' %}selected{% endif %}>Sort by Title</option>
+                    <option value="year" {% if sort=='year' %}selected{% endif %}>Sort by Year</option>
+                    <option value="rating" {% if sort=='rating' %}selected{% endif %}>Sort by Rating</option>
+                </select>
 
-    <!-- ----------------------------- ADD MOVIE BUTTON ----------------------------- -->
-    <p><a href="/add" class="btn-primary">➕ Add a New Movie</a></p>
+                <button type="submit">Apply</button>
+            </form>
+        </div>
 
-    <!-- ----------------------------- MOVIE GRID ----------------------------- -->
-    <div class="movie-grid">
-        {% for movie in movies %}
-        <div class="movie-card">
-            {% if movie.image_url %}
-                <img src="{{ movie.image_url }}" alt="{{ movie.title }}">
-            {% else %}
-                <div class="placeholder">No Image</div>
-            {% endif %}
-            <div class="movie-info">
-                <h2>{{ movie.title }} ({{ movie.year }})</h2>
-                <p><strong>Director:</strong> {{ movie.director.name if movie.director else '—' }}</p>
-                <p><strong>Genres:</strong>
-                {% if movie.genres %}
-                    {{ movie.genres | map(attribute='name') | join(', ') }}
-                {% else %}
-                    —
-                {% endif %}
-                </p>
+        {% if message %}
+        <div class="message-box">{{ message }}</div>
+        {% endif %}
 
-                <p>{{ movie.description }}</p>
-                <div class="actions">
-                    <a href="/edit/{{ movie.id }}">Edit</a> |
-                    <a href="/delete/{{ movie.id }}">Delete</a>
+        {% if user %}
+        <p class="auth-status">Logged in as <strong>{{ user.username }}</strong> · <a href="/logout">Logout</a></p>
+        <a href="/add" class="btn-primary">➕ Add a New Movie</a>
+        {% else %}
+        <a href="/login" class="btn-primary">Login</a>
+        {% endif %}
+
+
+        <div class="movie-grid">
+            {% for movie in movies %}
+            <div class="movie-card" onclick="openModal({{ movie.id }})">
+                <img src="{{ movie.image_url }}" class="poster">
+
+                <div class="movie-info">
+                    <h2>{{ movie.title }}</h2>
+                    <p class="year">{{ movie.year }}</p>
+                    <p class="genres">
+                        {{ movie.genres | map(attribute='name') | join(', ') }}
+                    </p>
+
+                    {% if movie.avg_rating %}
+                    <p class="rating">⭐ {{ '%.1f' | format(movie.avg_rating) }} / 5</p>
+                    {% else %}
+                    <p class="rating">No rating yet</p>
+                    {% endif %}
                 </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-</body>
-</html>
 
+    </div>
+
+    <div id="movie-modal" class="modal">
+        <div class="modal-card">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        function openModal(movieId) {
+            const modal = document.getElementById("movie-modal");
+            const modalBody = document.getElementById("modal-body");
+
+            fetch(`/movies/${movieId}?html=1`)
+                .then(response => response.text())
+                .then(html => {
+                    modalBody.innerHTML = html;
+                    modal.style.display = "flex";
+                });
+        }
+
+        function closeModal() {
+            document.getElementById("movie-modal").style.display = "none";
+        }
+
+        async function submitReview(event, movieId) {
+            event.preventDefault();
+            const data = new FormData(event.target);
+
+            await fetch(`/movies/${movieId}/review`, {
+                method: "POST",
+                body: data,
+            });
+
+            fetch(`/movies/${movieId}?html=1`)
+                .then(r => r.text())
+                .then(html => document.getElementById("modal-body").innerHTML = html);
+        }
+    </script>
+</body>
+
+</html>
